@@ -1,1 +1,102 @@
-# Reeact-query
+
+= React Query Overview
+:author: ChatGPT
+:date: 2024-11-12
+
+React Query is a powerful data-fetching library that simplifies handling server state in React applications by managing fetching, caching, synchronization, and updating of data.
+
+== Key Concepts in React Query
+
+=== queryFn
+The `queryFn` (query function) is the function that React Query calls to fetch data for a specific query. This function should return a promise resolving the desired data or rejecting if an error occurs. 
+Here’s a simple example using `fetch`:
+[source, javascript]
+----
+const fetchUsers = async () => {
+  const response = await fetch('https://jsonplaceholder.typicode.com/users');
+  if (!response.ok) {
+    throw new Error('Failed to fetch data');
+  }
+  return response.json();
+};
+----
+In `useQuery`:
+[source, javascript]
+----
+useQuery({
+  queryKey: ['users'],
+  queryFn: fetchUsers,
+});
+----
+
+=== queryKey
+The `queryKey` uniquely identifies each query. It’s used by React Query to cache, manage, and track the query’s state. Generally, an array is used to keep the `queryKey` descriptive. For example, a query key of `['users']` might fetch user data, while `['users', userId]` could fetch data for a specific user.
+[source, javascript]
+----
+useQuery({
+  queryKey: ['users', userId],
+  queryFn: () => fetchUserById(userId),
+});
+----
+
+=== cacheTime
+The `cacheTime` determines how long (in milliseconds) inactive query data is kept in cache. When set to a value (default is 5 minutes), it controls when the data will be garbage-collected. For example:
+[source, javascript]
+----
+useQuery({
+  queryKey: ['posts'],
+  queryFn: fetchPosts,
+  cacheTime: 1000 * 60 * 10, // 10 minutes
+});
+----
+
+=== staleTime
+The `staleTime` defines the period during which query data is considered “fresh”. During this time, data is served from cache and isn’t refetched. Once `staleTime` has elapsed, the data is marked “stale” and will refetch on certain conditions. 
+[source, javascript]
+----
+useQuery({
+  queryKey: ['todos'],
+  queryFn: fetchTodos,
+  staleTime: 1000 * 60 * 5, // 5 minutes
+});
+----
+
+== Using Mutations with useMutation
+Mutations handle data-modifying requests like POST, PUT, or DELETE. The `useMutation` hook takes a `mutationFn` and provides callback functions for various stages of the mutation process, such as `onSuccess`, `onError`, and `onSettled`.
+
+Example:
+[source, javascript]
+----
+const mutation = useMutation({
+  mutationFn: addUser,
+  onMutate: async (newUser) => {
+    await queryClient.cancelQueries(['users']);
+    const previousUsers = queryClient.getQueryData(['users']);
+    queryClient.setQueryData(['users'], (old) => [...old, { ...newUser, id: Date.now() }]);
+    return { previousUsers };
+  },
+  onSuccess: (data) => {
+    queryClient.invalidateQueries(['users']);
+  },
+  onError: (error, newUser, context) => {
+    queryClient.setQueryData(['users'], context.previousUsers);
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries(['users']);
+  },
+});
+----
+
+=== Advanced Use of onMutate
+`onMutate` is an optimistic update function, meaning it allows us to optimistically modify the local cache before the mutation completes. It’s particularly helpful for immediate feedback in the UI.
+
+Steps in `onMutate`:
+1. `cancelQueries`: Stops ongoing queries for the specified `queryKey` to prevent data conflicts.
+2. `getQueryData`: Gets the current state of the data to store for rollback.
+3. `setQueryData`: Applies the optimistic update.
+4. Return a rollback context (e.g., `previousUsers`) for use in `onError`.
+
+In `onError`, the rollback context is used to reset the data if the mutation fails, ensuring no inconsistency.
+
+== Summary
+React Query simplifies data management by providing tools for data fetching, caching, and mutations. With concepts like `cacheTime` and `staleTime`, we have fine control over how fresh and available data remains. Optimistic updates through `onMutate` ensure immediate UI updates, while rollback ensures consistency.
